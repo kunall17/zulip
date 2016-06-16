@@ -59,6 +59,7 @@ from zerver.tornadoviews import get_events_backend
 from collections import OrderedDict
 import time
 import ujson
+import mock
 from six.moves import range
 
 
@@ -996,3 +997,15 @@ class TestEventsRegisterNarrowDefaults(TestCase):
         self.user_profile.save()
         result = _default_narrow(self.user_profile, [])
         self.assertEqual(result, [])
+
+class AndroidDevGetEmailTest(AuthedTestCase):
+    def test_success(self):
+        # type: () -> None
+        result = self.client.get("/api/v1/dev_android_get_email")
+        self.assert_json_success(result)
+
+    def test_dev_auth_disabled(self):
+        # type: () -> None
+        with mock.patch('zerver.views.dev_auth_enabled', return_value=False):
+            result = self.client.get("/api/v1/dev_android_get_email")
+            self.assert_json_error_contains(result, "Dev environment not enabled.", 400)
