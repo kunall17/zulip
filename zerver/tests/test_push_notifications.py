@@ -645,7 +645,7 @@ class TestGetAlertFromMessage(PushNotificationTest):
                          "Hamlet")
 
 class TestGetAPNsPayload(PushNotificationTest):
-    def test_get_apns_payload(self):
+    def test_get_apns_payload_personal(self):
         # type: () -> None
         message = self.get_message(Recipient.PERSONAL)
         message.trigger = 'private_message'
@@ -660,11 +660,42 @@ class TestGetAPNsPayload(PushNotificationTest):
                 'zulip': {
                     'message_ids': [message.id],
                     "trigger": message.trigger,
+                    'recipient_type': 'private',
+                    'sender_email': 'hamlet@zulip.com',
+                    'sender_id': 4,
                 }
             }
         }
         self.assertDictEqual(payload, expected)
 
+    def test_get_apns_payload_stream(self):
+        # type: () -> None
+        stream = Stream.objects.filter(name='Verona').get()
+        message = self.get_message(Recipient.STREAM, stream.id)
+        message.triggers = {
+            'private_message': False,
+            'mentioned': True,
+            'stream_push_notify': False,
+        }
+        payload = apn.get_apns_payload(message)
+        expected = {
+            'alert': {
+                'title': "New mention from King Hamlet",
+                'body': message.content,
+            },
+            'badge': 0,
+            'custom': {
+                'zulip': {
+                    'message_ids': [message.id],
+                    'recipient_type': 'stream',
+                    'sender_email': self.example_email("hamlet"),
+                    'stream': apn.get_display_recipient(message.recipient),
+                    'topic': message.subject,
+                    'sender_id': 4,
+                }
+            }
+        }
+        self.assertDictEqual(payload, expected)
 class TestGetGCMPayload(PushNotificationTest):
     def test_get_gcm_payload(self):
         # type: () -> None
