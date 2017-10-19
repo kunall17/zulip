@@ -609,7 +609,7 @@ class TestGetAlertFromMessage(PushNotificationTest):
     def test_get_alert_from_private_group_message(self):
         # type: () -> None
         message = self.get_message(Recipient.HUDDLE)
-        message.trigger = 'private_message'
+        message.trigger = 'group_message'
         alert = apn.get_alert_from_message(message)
         self.assertEqual(alert, "New private group message from King Hamlet")
 
@@ -623,14 +623,14 @@ class TestGetAlertFromMessage(PushNotificationTest):
     def test_get_alert_from_mention(self):
         # type: () -> None
         message = self.get_message(Recipient.STREAM)
-        message.trigger = 'mentioned'
+        message.trigger = 'stream_mention'
         alert = apn.get_alert_from_message(message)
         self.assertEqual(alert, "New mention from King Hamlet")
 
     def test_get_alert_from_stream_message(self):
         # type: () -> None
         message = self.get_message(Recipient.STREAM)
-        message.trigger = 'stream_push_notify'
+        message.trigger = 'stream_message'
         message.stream_name = 'Denmark'
         alert = apn.get_alert_from_message(message)
         self.assertEqual(alert, "New stream message from King Hamlet in Denmark")
@@ -638,9 +638,8 @@ class TestGetAlertFromMessage(PushNotificationTest):
     def test_get_alert_from_other_message(self):
         # type: () -> None
         message = self.get_message(0)
-        message.trigger = 'stream_push_notify'
+        message.trigger = 'multiple'
         alert = apn.get_alert_from_message(message)
-        alert = apn.get_alert_from_message(self.get_message(0))
         self.assertEqual(alert,
                          "New Zulip mentions and private messages from King "
                          "Hamlet")
@@ -648,18 +647,19 @@ class TestGetAlertFromMessage(PushNotificationTest):
 class TestGetAPNsPayload(PushNotificationTest):
     def test_get_apns_payload(self):
         # type: () -> None
-        message = self.get_message(Recipient.HUDDLE)
+        message = self.get_message(Recipient.PERSONAL)
         message.trigger = 'private_message'
         payload = apn.get_apns_payload(message)
         expected = {
             'alert': {
-                'title': "New private group message from King Hamlet",
+                'title': "New private message from King Hamlet",
                 'body': message.content,
             },
             'badge': 0,
             'custom': {
                 'zulip': {
                     'message_ids': [message.id],
+                    "trigger": message.trigger,
                 }
             }
         }
@@ -673,7 +673,7 @@ class TestGetGCMPayload(PushNotificationTest):
         message.content = 'a' * 210
         message.rendered_content = 'a' * 210
         message.save()
-        message.trigger = 'mentioned'
+        message.trigger = 'stream_mention'
 
         user_profile = self.example_user('hamlet')
         payload = apn.get_gcm_payload(user_profile, message)
@@ -691,6 +691,7 @@ class TestGetGCMPayload(PushNotificationTest):
             "recipient_type": "stream",
             "stream": apn.get_display_recipient(message.recipient),
             "topic": message.subject,
+            "trigger": message.trigger,
         }
         self.assertDictEqual(payload, expected)
 
@@ -712,13 +713,14 @@ class TestGetGCMPayload(PushNotificationTest):
             "sender_full_name": "King Hamlet",
             "sender_avatar_url": apn.absolute_avatar_url(message.sender),
             "recipient_type": "private",
+            "trigger": message.trigger,
         }
         self.assertDictEqual(payload, expected)
 
     def test_get_gcm_payload_stream_notifications(self):
         # type: () -> None
         message = self.get_message(Recipient.STREAM, 1)
-        message.trigger = 'stream_push_notify'
+        message.trigger = 'stream_message'
         message.stream_name = 'Denmark'
         user_profile = self.example_user('hamlet')
         payload = apn.get_gcm_payload(user_profile, message)
@@ -735,7 +737,8 @@ class TestGetGCMPayload(PushNotificationTest):
             "sender_avatar_url": apn.absolute_avatar_url(message.sender),
             "recipient_type": "stream",
             "topic": "Test Message",
-            "stream": "Denmark"
+            "stream": "Denmark",
+            "trigger": message.trigger,
         }
         self.assertDictEqual(payload, expected)
 

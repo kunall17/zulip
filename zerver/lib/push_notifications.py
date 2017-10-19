@@ -388,14 +388,15 @@ def get_alert_from_message(message):
     Determine what alert string to display based on the missed messages.
     """
     sender_str = message.sender.full_name
-    if message.recipient.type == Recipient.HUDDLE and message.trigger == 'private_message':
+    if message.trigger == 'group_message':
         return "New private group message from %s" % (sender_str,)
-    elif message.recipient.type == Recipient.PERSONAL and message.trigger == 'private_message':
+    elif message.trigger == 'group_mention':
+        return "New private group mention from %s" % (sender_str,)
+    elif message.trigger == 'private_message':
         return "New private message from %s" % (sender_str,)
-    elif message.recipient.type == Recipient.STREAM and message.trigger == 'mentioned':
+    elif message.trigger == 'stream_mention':
         return "New mention from %s" % (sender_str,)
-    elif (message.recipient.type == Recipient.STREAM and
-            (message.trigger == 'stream_push_notify' and message.stream_name)):
+    elif message.trigger == 'stream_message':
         return "New stream message from %s in %s" % (sender_str, message.stream_name,)
     else:
         return "New Zulip mentions and private messages from %s" % (sender_str,)
@@ -455,6 +456,7 @@ def get_apns_payload(message):
         'badge': 0,
         'custom': {
             'zulip': {
+                'trigger': message.trigger,
                 'message_ids': [message.id],
             }
         }
@@ -476,6 +478,7 @@ def get_gcm_payload(user_profile, message):
         'sender_email': message.sender.email,
         'sender_full_name': message.sender.full_name,
         'sender_avatar_url': absolute_avatar_url(message.sender),
+        'trigger': message.trigger,
     }
 
     if message.recipient.type == Recipient.STREAM:
@@ -503,11 +506,21 @@ def handle_push_notification(user_profile_id, missed_message):
         umessage = UserMessage.objects.get(user_profile=user_profile,
                                            message__id=missed_message['message_id'])
         message = umessage.message
-        message.trigger = missed_message['trigger']
-        message.stream_name = missed_message.get('stream_name', None)
-
         if umessage.flags.read:
             return
+        if (message.recipient.type == Recipient.HUDDLE and message['mentioned']):
+            message.trigger = 'group_mention'
+        elif (message.recipient.type == Recipient.HUDDLE):
+            message.trigger = 'group_message'
+        elif (message.recipient.type == Recipient.PERSONAL):
+            message.trigger = 'private_message'
+        elif (message.recipient.type == Recipient.STREAM):
+            message.trigger = 'stream_mention'
+        elif (message.recipient.type == Recipient.STREAM and message['mentioned']):
+            message.trigger = 'stream_push_notify'
+        else:
+            message.trigger = 'multiple'
+        message.stream_name = missed_message.get('stream_name', None)
 
         apns_payload = get_apns_payload(message)
         gcm_payload = get_gcm_payload(user_profile, message)
